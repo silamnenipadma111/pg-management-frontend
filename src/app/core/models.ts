@@ -14,11 +14,46 @@ export interface User {
   phone: string;
   role: Role;
   gender?: string;
+  emailVerified: boolean;
 }
 
-export interface AuthResponse {
-  token: string;
+/**
+ * The signed-in user. The session itself lives in an HttpOnly cookie that JavaScript cannot read;
+ * `csrfToken` is echoed in the X-CSRF-Token header of every state changing request.
+ */
+export interface SessionResponse {
   user: User;
+  csrfToken: string;
+  expiresAt: string;
+}
+
+export interface SignupResponse {
+  email: string;
+  verificationRequired: boolean;
+  message: string;
+}
+
+export interface MessageResponse {
+  message: string;
+}
+
+/** Error body of the API. `code` is a machine readable reason, e.g. EMAIL_NOT_VERIFIED. */
+export interface ApiErrorBody {
+  status: number;
+  message: string;
+  code?: string;
+  retryAfterSeconds?: number;
+}
+
+/** Address resolved from coordinates ("use my current location") or from a pincode. */
+export interface Address {
+  addressLine?: string | null;
+  area?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface PgSummary {
@@ -39,6 +74,13 @@ export interface PgSummary {
   distanceKm?: number | null;
   latitude?: number;
   longitude?: number;
+}
+
+/** A PG the customer stayed at before ("book again" suggestion). */
+export interface PreviousStay {
+  pg: PgSummary;
+  lastStayFrom: string;
+  stays: number;
 }
 
 export interface Media {
@@ -85,6 +127,7 @@ export interface PgDetail {
   genderPreference: GenderPreference;
   facilities: string[];
   contactPhone: string;
+  upiId?: string | null;
   houseRules?: string;
   ownerName: string;
   registeredVia: 'OWNER' | 'CUSTOMER_CARE';
@@ -127,6 +170,7 @@ export interface PgRequest {
   genderPreference: GenderPreference;
   facilities: string[];
   contactPhone: string;
+  upiId?: string | null;
   houseRules?: string;
   media: Media[];
   rooms: RoomRequest[];
@@ -181,6 +225,7 @@ export interface Payment {
   overdue: boolean;
   paymentMethod?: string;
   transactionRef?: string;
+  paymentDetails?: string;
   ownerNote?: string;
   submittedAt?: string;
   paidAt?: string;
@@ -191,6 +236,7 @@ export interface Payment {
   bedLabel: string;
   bookingType: BookingType;
   bookingStatus: BookingStatus;
+  lastReminderOn?: string;
   customer: CustomerInfo;
 }
 
@@ -217,6 +263,7 @@ export interface Invoice {
   amount: number;
   paymentMethod: string;
   transactionRef?: string;
+  paymentDetails?: string;
 }
 
 export interface PgStats {
@@ -250,12 +297,14 @@ export interface AppNotification {
   createdAt: string;
 }
 
+export type SupportRequestType = 'CALLBACK' | 'REGISTER_PG' | 'GENERAL';
+
 export interface SupportRequest {
   id: number;
   name: string;
   phone: string;
   email?: string;
-  requestType: 'CALLBACK' | 'REGISTER_PG' | 'GENERAL';
+  requestType: SupportRequestType;
   message?: string;
   status: 'OPEN' | 'RESOLVED';
   createdAt: string;
@@ -272,12 +321,48 @@ export interface SearchFilters {
   q?: string;
   city?: string;
   sharing?: number | null;
-  minRent?: number | null;
-  maxRent?: number | null;
   gender?: GenderPreference | '';
   ac?: boolean | null;
   lat?: number | null;
   lng?: number | null;
   radiusKm?: number | null;
   sort?: string;
+}
+
+export type OnlineMethod = 'UPI' | 'CARD' | 'NET_BANKING';
+export type UpiApp = 'GPAY' | 'PHONEPE' | 'PAYTM' | 'BHIM' | 'AMAZONPAY' | 'OTHER';
+
+export interface Checkout {
+  paymentId: number;
+  orderId: string;
+  amount: number;
+  paymentMethod: OnlineMethod;
+  payeeName: string;
+  payeeUpiId?: string;
+  note: string;
+  upiUri?: string;
+}
+
+export interface CompletePayment {
+  orderId: string;
+  paymentMethod: OnlineMethod;
+  upiApp?: UpiApp;
+  payerUpiId?: string;
+  upiRef?: string;
+  cardLast4?: string;
+  cardNetwork?: string;
+  cardHolder?: string;
+  bank?: string;
+}
+
+export interface ReminderResult {
+  channels: string[];
+  sentOn: string;
+}
+
+export interface AssistedPgResult {
+  pg: PgDetail;
+  ownerEmail: string;
+  ownerAccountCreated: boolean;
+  temporaryPassword?: string;
 }

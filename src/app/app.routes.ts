@@ -1,12 +1,22 @@
 import { Routes } from '@angular/router';
-import { roleGuard } from './core/guards';
+import { guestGuard, roleGuard } from './core/guards';
 
 export const routes: Routes = [
   { path: '', loadComponent: () => import('./pages/home/home.component').then(m => m.HomeComponent) },
-  { path: 'signin', loadComponent: () => import('./pages/auth/signin.component').then(m => m.SigninComponent) },
-  { path: 'signup', loadComponent: () => import('./pages/auth/signup.component').then(m => m.SignupComponent) },
+  {
+    path: 'signin',
+    canActivate: [guestGuard],
+    loadComponent: () => import('./pages/auth/signin.component').then(m => m.SigninComponent)
+  },
+  {
+    path: 'signup',
+    canActivate: [guestGuard],
+    loadComponent: () => import('./pages/auth/signup.component').then(m => m.SignupComponent)
+  },
+  { path: 'verify-email', loadComponent: () => import('./pages/auth/verify-email.component').then(m => m.VerifyEmailComponent) },
+  { path: 'forgot-password', loadComponent: () => import('./pages/auth/forgot-password.component').then(m => m.ForgotPasswordComponent) },
+  { path: 'reset-password', loadComponent: () => import('./pages/auth/reset-password.component').then(m => m.ResetPasswordComponent) },
   { path: 'customer-care', loadComponent: () => import('./pages/info/customer-care.component').then(m => m.CustomerCareComponent) },
-  { path: 'faq', loadComponent: () => import('./pages/info/faq.component').then(m => m.FaqComponent) },
   {
     path: 'pgs/:id',
     canActivate: [roleGuard()],
@@ -47,11 +57,7 @@ export const routes: Routes = [
     canActivate: [roleGuard('SUPPORT')],
     loadComponent: () => import('./pages/support/support.component').then(m => m.SupportComponent)
   },
-  {
-    path: 'notifications',
-    canActivate: [roleGuard()],
-    loadComponent: () => import('./pages/notifications/notifications.component').then(m => m.NotificationsComponent)
-  },
+  // links used by older notifications and emails
   { path: 'customer/rents', redirectTo: 'my-rents' },
   { path: 'owner/dashboards', redirectTo: 'owner/dashboard' },
   { path: '**', redirectTo: '' }

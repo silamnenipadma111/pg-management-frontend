@@ -1,25 +1,32 @@
 import { Component, input, signal } from '@angular/core';
+import { IconComponent } from './icon.component';
+
+/** Shown when a photo URL cannot be loaded, instead of the browser's broken-image icon. */
+const PLACEHOLDER = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 10"><rect width="16" height="10" fill="#EAE3D8"/></svg>');
 
 /** Image slider with previous / next arrows and dots. */
 @Component({
   selector: 'app-carousel',
   standalone: true,
+  imports: [IconComponent],
   template: `
-    <div class="carousel" [style.height]="height()">
+    <div class="carousel">
       @if (images().length) {
-        <img [src]="images()[index()]" [alt]="alt() + ' photo ' + (index() + 1)" loading="lazy" />
+        <img [src]="images()[index()]" [alt]="alt() + ' - photo ' + (index() + 1)" loading="lazy" (error)="onError($event)" />
         @if (images().length > 1) {
-          <button class="nav prev" (click)="prev($event)" aria-label="Previous photo">‹</button>
-          <button class="nav next" (click)="next($event)" aria-label="Next photo">›</button>
-          <div class="dots">
-            @for (img of images(); track $index) {
-              <span [class.on]="$index === index()" (click)="index.set($index)"></span>
-            }
+          <button type="button" class="carousel-nav prev" (click)="step(-1, $event)" aria-label="Previous photo">
+            <app-icon name="chevron-left" [size]="18" />
+          </button>
+          <button type="button" class="carousel-nav next" (click)="step(1, $event)" aria-label="Next photo">
+            <app-icon name="chevron-right" [size]="18" />
+          </button>
+          <div class="carousel-dots" aria-hidden="true">
+            @for (img of images(); track $index) { <span [class.on]="$index === index()"></span> }
           </div>
-          <span class="counter">{{ index() + 1 }}/{{ images().length }}</span>
         }
       } @else {
-        <div class="no-image">🏠</div>
+        <div class="no-image"><app-icon name="home" [size]="40" [stroke]="1.2" /></div>
       }
     </div>
   `
@@ -27,16 +34,19 @@ import { Component, input, signal } from '@angular/core';
 export class CarouselComponent {
   images = input<string[]>([]);
   alt = input('PG');
-  height = input('220px');
   index = signal(0);
 
-  next(e: Event): void {
-    e.stopPropagation();
-    this.index.set((this.index() + 1) % this.images().length);
+  step(delta: number, event: Event): void {
+    event.stopPropagation();
+    const count = this.images().length;
+    this.index.set((this.index() + delta + count) % count);
   }
 
-  prev(e: Event): void {
-    e.stopPropagation();
-    this.index.set((this.index() - 1 + this.images().length) % this.images().length);
+  onError(event: Event): void {
+    const img = event.target as HTMLImageElement;
+    if (!img.dataset['fallback']) {
+      img.dataset['fallback'] = '1';
+      img.src = PLACEHOLDER;
+    }
   }
 }

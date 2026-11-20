@@ -1,53 +1,93 @@
 import { Component, OnInit, inject, input, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { ApiService } from '../../core/api.service';
+import { ApiService, errorMessage } from '../../core/api.service';
 import { TranslatePipe } from '../../core/i18n.service';
 import { Invoice } from '../../core/models';
+import { BrandComponent } from '../../shared/brand.component';
+import { IconComponent } from '../../shared/icon.component';
 
 @Component({
   selector: 'app-invoice',
   standalone: true,
-  imports: [TranslatePipe, DatePipe, DecimalPipe, RouterLink],
+  imports: [TranslatePipe, DatePipe, DecimalPipe, RouterLink, BrandComponent, IconComponent],
   template: `
-    <a routerLink="/my-rents" class="back no-print">‹ {{ 'nav.myRents' | t }}</a>
-    @if (inv(); as i) {
-      <div class="card pad invoice">
-        <div class="row-between">
-          <div><h2>🏠 {{ 'app.name' | t }}</h2><p class="muted">{{ 'invoice.title' | t }}</p></div>
-          <div class="right"><b>{{ i.invoiceNumber }}</b><br /><span class="muted">{{ i.issuedAt | date: 'medium' }}</span></div>
-        </div>
-        <hr />
-        <div class="two-col">
-          <div><h4>PG</h4><p>{{ i.pgName }}<br />{{ i.pgAddress }}<br />📞 {{ i.pgContactPhone }}<br />{{ i.ownerName }}</p></div>
-          <div><h4>{{ 'dash.customer' | t }}</h4><p>{{ i.customerName }}<br />{{ i.customerEmail }}<br />📞 {{ i.customerPhone }}</p></div>
-        </div>
-        <table>
-          <thead><tr><th>Description</th><th>{{ 'rents.period' | t }}</th><th class="right">{{ 'common.amount' | t }}</th></tr></thead>
-          <tbody><tr>
-            <td>{{ 'bookingType.' + i.bookingType | t }} rent · {{ 'common.room' | t }} {{ i.roomNumber }} ({{ 'common.floor' | t }} {{ i.floorNumber }}) · {{ 'common.bed' | t }} {{ i.bedLabel }} · {{ 'common.sharing' | t: { n: i.sharingType } }}<br />
-              <small class="muted">{{ 'rents.installment' | t: { n: i.installmentNo, t: i.totalInstallments } }}</small></td>
-            <td>{{ i.periodStart | date: 'mediumDate' }} – {{ i.periodEnd | date: 'mediumDate' }}</td>
-            <td class="right">₹{{ i.amount | number: '1.2-2' }}</td>
-          </tr></tbody>
-          <tfoot><tr><th colspan="2" class="right">{{ 'booking.total' | t }}</th><th class="right">₹{{ i.amount | number: '1.2-2' }}</th></tr></tfoot>
-        </table>
-        <p class="muted">{{ 'rents.method' | t }}: {{ i.paymentMethod }} @if (i.transactionRef) { · Ref: {{ i.transactionRef }} } · {{ 'pay.PAID' | t }} ✔</p>
-        <button class="btn btn-primary no-print" (click)="print()">{{ 'invoice.print' | t }}</button>
-      </div>
-    } @else { <p class="muted">{{ 'common.loading' | t }}</p> }
+    <div class="container page page-narrow">
+      <a routerLink="/my-rents" [queryParams]="{ tab: 'history' }" class="back-link no-print">
+        <app-icon name="arrow-left" [size]="14" /> {{ 'nav.myRents' | t }}
+      </a>
+      @if (inv(); as i) {
+        <article class="card invoice">
+          <header class="invoice-head">
+            <app-brand />
+            <div class="invoice-meta">
+              <p class="eyebrow">{{ 'invoice.title' | t }}</p>
+              <p class="invoice-number">{{ i.invoiceNumber }}</p>
+              <p class="muted small">{{ i.issuedAt | date: 'd MMM y, h:mm a' }}</p>
+            </div>
+          </header>
+
+          <div class="invoice-parties">
+            <div>
+              <p class="eyebrow">{{ 'invoice.from' | t }}</p>
+              <p><b>{{ i.pgName }}</b><br />{{ i.pgAddress }}<br />{{ i.ownerName }} · {{ i.pgContactPhone }}</p>
+            </div>
+            <div>
+              <p class="eyebrow">{{ 'invoice.to' | t }}</p>
+              <p><b>{{ i.customerName }}</b><br />{{ i.customerEmail }}<br />{{ i.customerPhone }}</p>
+            </div>
+          </div>
+
+          <div class="table-wrap ledger">
+            <table>
+              <thead>
+                <tr><th>{{ 'invoice.description' | t }}</th><th>{{ 'rents.period' | t }}</th><th class="num">{{ 'common.amount' | t }}</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>{{ 'bookingType.' + i.bookingType | t }} · {{ 'common.room' | t }} {{ i.roomNumber }}
+                    ({{ 'common.floor' | t }} {{ i.floorNumber }}) · {{ 'common.bed' | t }} {{ i.bedLabel }} ·
+                    {{ 'common.sharing' | t: { n: i.sharingType } }}<br />
+                    <small class="muted">{{ 'rents.installment' | t: { n: i.installmentNo, t: i.totalInstallments } }}</small></td>
+                  <td>{{ i.periodStart | date: 'd MMM y' }} – {{ i.periodEnd | date: 'd MMM y' }}</td>
+                  <td class="num">₹{{ i.amount | number: '1.2-2' }}</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr><th colspan="2" class="num">{{ 'booking.total' | t }}</th><th class="num">₹{{ i.amount | number: '1.2-2' }}</th></tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <footer class="invoice-foot">
+            <p class="muted">{{ 'rents.method' | t }}: {{ 'pay.m.' + i.paymentMethod | t }}
+              @if (i.paymentDetails) { ({{ i.paymentDetails }}) }
+              @if (i.transactionRef) { · {{ 'invoice.ref' | t }} {{ i.transactionRef }} }</p>
+            <span class="status-pill" data-status="PAID"><app-icon name="check" [size]="13" /> {{ 'pay.PAID' | t }}</span>
+          </footer>
+          <button type="button" class="btn btn-primary no-print" (click)="print()">
+            <app-icon name="printer" [size]="14" /> {{ 'invoice.print' | t }}
+          </button>
+        </article>
+      } @else if (error()) {
+        <p class="alert error" role="alert">{{ error() }}</p>
+      } @else {
+        <div class="skeleton skeleton-block"></div>
+      }
+    </div>
   `
 })
 export class InvoiceComponent implements OnInit {
-  id = input.required<string>();
-  private api = inject(ApiService);
-  inv = signal<Invoice | null>(null);
+  readonly id = input.required<string>();
+  private readonly api = inject(ApiService);
+  readonly inv = signal<Invoice | null>(null);
+  readonly error = signal('');
 
   ngOnInit(): void {
-    this.api.invoice(+this.id()).subscribe(i => this.inv.set(i));
+    this.api.invoice(+this.id()).subscribe({ next: i => this.inv.set(i), error: err => this.error.set(errorMessage(err)) });
   }
 
   print(): void {
-    window.print();
+    globalThis.print();
   }
 }

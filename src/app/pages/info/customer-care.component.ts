@@ -2,6 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, errorMessage } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
+import { SupportRequestType } from '../../core/models';
 import { TranslatePipe } from '../../core/i18n.service';
 import { environment } from '../../../environments/environment';
 
@@ -45,7 +46,7 @@ export class CustomerCareComponent {
   phone = environment.supportPhone;
   email = environment.supportEmail;
   m = {
-    requestType: this.auth.role() === 'OWNER' ? 'REGISTER_PG' : 'CALLBACK',
+    requestType: (this.auth.role() === 'OWNER' ? 'REGISTER_PG' : 'CALLBACK') as SupportRequestType,
     name: this.auth.user()?.name ?? '', phone: this.auth.user()?.phone ?? '', email: this.auth.user()?.email ?? '', message: ''
   };
   busy = signal(false);

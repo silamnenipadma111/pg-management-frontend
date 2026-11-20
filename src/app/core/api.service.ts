@@ -3,14 +3,19 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import {
-  AppNotification, AuthResponse, Booking, BookingType, Invoice, Media, MetaOptions, OwnerDashboard, Payment,
-  PaymentPlan, PgDetail, PgRequest, PgSummary, Role, SearchFilters, SupportRequest, User
+  Address, ApiErrorBody, AppNotification, AssistedPgResult, Booking, BookingType, Checkout, CompletePayment, Invoice,
+  Media, MessageResponse, MetaOptions, OnlineMethod, OwnerDashboard, Payment, PaymentPlan, PgDetail, PgRequest,
+  PgSummary, PreviousStay, ReminderResult, Role, SearchFilters, SessionResponse, SignupResponse, SupportRequest,
+  SupportRequestType
 } from './models';
+
+/** Base URL of every API call; the auth interceptor only attaches credentials to URLs below it. */
+export const API_BASE = environment.apiUrl + '/api';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
-  private http = inject(HttpClient);
-  private base = environment.apiUrl + '/api';
+  private readonly http = inject(HttpClient);
+  private readonly base = API_BASE;
 
   /** Resolve media URLs returned by the API (uploaded files are relative to the API host). */
   static mediaUrl(url: string | null | undefined): string {
@@ -20,18 +25,41 @@ export class ApiService {
     return url.startsWith('/') ? environment.apiUrl + url : url;
   }
 
+  // account
   signup(body: { name: string; email: string; phone: string; password: string; role: Role; gender?: string | null }) {
-    return this.http.post<AuthResponse>(`${this.base}/auth/signup`, body);
+    return this.http.post<SignupResponse>(`${this.base}/auth/signup`, body);
   }
 
   signin(body: { email: string; password: string; role: Role }) {
-    return this.http.post<AuthResponse>(`${this.base}/auth/signin`, body);
+    return this.http.post<SessionResponse>(`${this.base}/auth/signin`, body);
   }
 
-  me() {
-    return this.http.get<User>(`${this.base}/auth/me`);
+  /** The current session (restores the signed-in state after a page reload). */
+  session() {
+    return this.http.get<SessionResponse>(`${this.base}/auth/session`);
   }
 
+  signout() {
+    return this.http.post<void>(`${this.base}/auth/signout`, {});
+  }
+
+  verifyEmail(token: string) {
+    return this.http.post<MessageResponse>(`${this.base}/auth/verify-email`, { token });
+  }
+
+  resendVerification(email: string) {
+    return this.http.post<MessageResponse>(`${this.base}/auth/resend-verification`, { email });
+  }
+
+  forgotPassword(email: string) {
+    return this.http.post<MessageResponse>(`${this.base}/auth/forgot-password`, { email });
+  }
+
+  resetPassword(token: string, password: string) {
+    return this.http.post<MessageResponse>(`${this.base}/auth/reset-password`, { token, password });
+  }
+
+  // browsing
   options() {
     return this.http.get<MetaOptions>(`${this.base}/meta/options`);
   }
@@ -50,6 +78,16 @@ export class ApiService {
     return this.http.get<PgDetail>(`${this.base}/pgs/${id}`);
   }
 
+  /** Address at the given coordinates ("use my current location"). */
+  reverseGeocode(lat: number, lng: number) {
+    return this.http.get<Address>(`${this.base}/geo/reverse`, { params: { lat, lng } });
+  }
+
+  /** City, state and approximate coordinates of a 6 digit pincode. */
+  pincode(pincode: string) {
+    return this.http.get<Address>(`${this.base}/geo/pincode/${encodeURIComponent(pincode)}`);
+  }
+
   // customer
   requestBooking(body: { bedId: number; bookingType: BookingType; duration: number; startDate: string; paymentPlan: PaymentPlan; note?: string }) {
     return this.http.post<Booking>(`${this.base}/bookings`, body);
@@ -57,6 +95,11 @@ export class ApiService {
 
   myBookings() {
     return this.http.get<Booking[]>(`${this.base}/bookings/my`);
+  }
+
+  /** PGs this customer stayed at before. */
+  previousStays() {
+    return this.http.get<PreviousStay[]>(`${this.base}/bookings/suggestions`);
   }
 
   cancelBooking(id: number) {
@@ -67,8 +110,19 @@ export class ApiService {
     return this.http.get<Payment[]>(`${this.base}/payments/my`, { params: { scope } });
   }
 
-  pay(id: number, paymentMethod: string, transactionRef?: string) {
-    return this.http.post<Payment>(`${this.base}/payments/${id}/pay`, { paymentMethod, transactionRef });
+  /** Online payment step 1: issues an order (and the upi:// link for UPI). */
+  checkout(id: number, paymentMethod: OnlineMethod) {
+    return this.http.post<Checkout>(`${this.base}/payments/${id}/checkout`, { paymentMethod });
+  }
+
+  /** Online payment step 2: marks the rent paid and books the bed. */
+  completePayment(id: number, body: CompletePayment) {
+    return this.http.post<Payment>(`${this.base}/payments/${id}/complete`, body);
+  }
+
+  /** Cash given to the owner: the owner has to accept it. */
+  cashPayment(id: number, body: { paidOn: string; receivedBy: string; note?: string }) {
+    return this.http.post<Payment>(`${this.base}/payments/${id}/cash`, body);
   }
 
   invoice(id: number) {
@@ -101,12 +155,7 @@ export class ApiService {
   }
 
   ownerBookings(status?: string[], pgId?: number | null) {
-    let params = new HttpParams();
-    status?.forEach(s => (params = params.append('status', s)));
-    if (pgId) {
-      params = params.set('pgId', pgId);
-    }
-    return this.http.get<Booking[]>(`${this.base}/owner/bookings`, { params });
+    return this.http.get<Booking[]>(`${this.base}/owner/bookings`, { params: this.statusParams(status, pgId) });
   }
 
   approveBooking(id: number, note?: string) {
@@ -118,16 +167,15 @@ export class ApiService {
   }
 
   ownerPayments(status?: string[], pgId?: number | null) {
-    let params = new HttpParams();
-    status?.forEach(s => (params = params.append('status', s)));
-    if (pgId) {
-      params = params.set('pgId', pgId);
-    }
-    return this.http.get<Payment[]>(`${this.base}/owner/payments`, { params });
+    return this.http.get<Payment[]>(`${this.base}/owner/payments`, { params: this.statusParams(status, pgId) });
   }
 
   confirmPayment(id: number) {
     return this.http.post<Payment>(`${this.base}/owner/payments/${id}/confirm`, {});
+  }
+
+  remindPayment(id: number) {
+    return this.http.post<ReminderResult>(`${this.base}/owner/payments/${id}/remind`, {});
   }
 
   rejectPayment(id: number, note?: string) {
@@ -154,7 +202,7 @@ export class ApiService {
   }
 
   // support
-  createSupportRequest(body: { name: string; phone: string; email?: string; requestType: string; message?: string }) {
+  createSupportRequest(body: { name: string; phone: string; email?: string; requestType: SupportRequestType; message?: string }) {
     return this.http.post<SupportRequest>(`${this.base}/support/requests`, body);
   }
 
@@ -167,21 +215,36 @@ export class ApiService {
   }
 
   registerPgForOwner(body: { ownerName: string; ownerEmail: string; ownerPhone: string; supportRequestId?: number | null; pg: PgRequest }) {
-    return this.http.post<{ pg: PgDetail; ownerEmail: string; ownerAccountCreated: boolean; temporaryPassword?: string }>(
-      `${this.base}/support/pgs`, body);
+    return this.http.post<AssistedPgResult>(`${this.base}/support/pgs`, body);
+  }
+
+  private statusParams(status?: string[], pgId?: number | null): HttpParams {
+    let params = new HttpParams();
+    status?.forEach(s => (params = params.append('status', s)));
+    if (pgId) {
+      params = params.set('pgId', pgId);
+    }
+    return params;
   }
 }
 
+function errorBody(err: unknown): Partial<ApiErrorBody> | undefined {
+  return (err as { error?: Partial<ApiErrorBody> } | null)?.error;
+}
+
+/** Message of a failed API call, safe to show to the user. */
 export function errorMessage(err: unknown): string {
-  const e = err as { error?: { message?: string; errors?: Record<string, string> }; status?: number };
-  if (e?.error?.errors) {
-    return Object.entries(e.error.errors).map(([k, v]) => `${k}: ${v}`).join(', ');
+  const message = errorBody(err)?.message;
+  if (message) {
+    return message;
   }
-  if (e?.error?.message) {
-    return e.error.message;
-  }
-  if (e?.status === 0) {
-    return 'Cannot reach the server. Please try again.';
+  if ((err as { status?: number } | null)?.status === 0) {
+    return 'Cannot reach the server. Please check your connection and try again.';
   }
   return 'Something went wrong. Please try again.';
+}
+
+/** Machine readable reason of a failed API call, e.g. EMAIL_NOT_VERIFIED. */
+export function errorCode(err: unknown): string | undefined {
+  return errorBody(err)?.code;
 }

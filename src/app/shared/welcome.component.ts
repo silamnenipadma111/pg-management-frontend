@@ -20,9 +20,12 @@ import { LocationService } from '../core/location.service';
         </div>
         <h4>📍 {{ 'welcome.location' | t }}</h4>
         @if (location.status() === 'granted') {
-          <p class="ok">✔ {{ location.coords()?.lat }}, {{ location.coords()?.lng }}</p>
-        } @else if (location.status() === 'denied' || location.status() === 'unsupported') {
-          <p class="warn">{{ 'welcome.denied' | t }}</p>
+          <p class="ok">✔ {{ location.coords()?.lat }}, {{ location.coords()?.lng }}
+            @if (location.coords()?.accuracy) { (±{{ location.coords()?.accuracy }} m) }
+            @if (location.nearestCity(); as near) { @if (near.km < 60) { · {{ 'home.nearCity' | t: { city: near.name } }} } }
+          </p>
+        } @else if (location.status() !== 'unknown') {
+          <p class="warn">{{ 'location.' + location.status() | t }}</p>
         } @else if (locating()) {
           <p class="muted">{{ 'welcome.locating' | t }}</p>
         }
